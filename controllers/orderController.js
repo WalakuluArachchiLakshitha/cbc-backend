@@ -160,7 +160,7 @@ export async function createOrder(req, res) {
 export async function getOrders(req, res) {
   if (isAdmin(req)) {
     // ✅ FIXED: added parentheses after findOne()
-    const orders = await Order.findOne().sort({ date: -1 });
+    const orders = await Order.find().sort({ date: -1 });
     res.json(orders);
   } 
   else if (isCustomer(req)) {
