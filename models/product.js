@@ -1,52 +1,61 @@
 import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema(
-    {
-         productID :{
-            type : String,
-            required : true,
-            unique : true,
-         },
-         name:{
-            type : String,
-            required : true,
-         },
-         altNames:{
-            type : [String],
-            default : [],
-            required: true
-         },
-         description:{
-            type : String,
-            required : true,
-         },
-         image :{
-            type : [String],
-            default : [],
-            required : true,
-         },
-         price:{
-            type : Number,
-            required : true,
-         },
-         labelPrice:{
-            type : Number,
-            required : true,
-         },
-        category:{
-            type : String,
-            required : true,
-        },
-        stock:{
-            type : Number,
-            required : true,
-            default : 0
-        }
+
+   {
+      productID: {
+         type: String,
+         required: true,
+         unique: true,
+      },
+      name: {
+         type: String,
+         required: true,
+      },
+      altNames: {
+         type: [String],
+         default: [],
+         required: true
+      },
+      description: {
+         type: String,
+         required: true,
+      },
+      image: {
+         type: [String],
+         default: [],
+         required: true,
+      },
+      price: {
+         type: Number,
+         required: true,
+      },
+      labelPrice: {
+         type: Number,
+         required: true,
+      },
+      category: {
+         type: String,
+         required: true,
+      },
+      stock: {
+         type: Number,
+         required: true,
+         default: 0
+      },
+      reviews: [
+         {
+            name: { type: String, required: true },
+            rating: { type: Number, required: true },
+            comment: { type: String, required: true },
+            date: { type: Date, default: Date.now }
+         }
+      ]
 
 
 
 
-    }
+   }
 )
 
 const Product = mongoose.model("product", productSchema);
