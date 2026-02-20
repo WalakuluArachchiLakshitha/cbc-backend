@@ -398,37 +398,32 @@ export async function changePasswordViaOTP(req, res) {
   try {
     const otpRecord = await OTP.findOne({
       email: email,
-      otp: otp,
+      otp: otp.toString(),
     });
 
-    if (otpRecord == null) {
-      res.status(400).json({
-        message: "Invalid OTP",
-      });
+    if (!otpRecord) {
+      res.status(400).json({ message: "Invalid OTP" });
+      return;
+    }
+    if (otpRecord.expiresAt < Date.now()) {
+      res.status(400).json({ message: "OTP expired" });
       return;
     }
 
-    await OTP.deleteMany({
-      email: email,
-    });
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    await OTP.deleteMany({ email: email });
 
     const hashedPassword = bcrypt.hashSync(newPassword, 10);
 
-    await User.updateOne(
-      {
-        email: email,
-      },
-      {
-        password: hashedPassword,
-      },
-    );
-    res.json({
-      message: "Password changed successfully",
-    });
+    await User.updateOne({ email: email }, { password: hashedPassword });
+    res.json({ message: "Password changed successfully" });
   } catch (err) {
-    res.status(500).json({
-      message: "Failed to change password",
-    });
+    res.status(500).json({ message: "Failed to change password" });
   }
 }
 
