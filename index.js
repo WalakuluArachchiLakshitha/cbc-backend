@@ -18,27 +18,26 @@ app.use(cors())
 app.use(express.json())
 
 // JWT middleware
-app.use(
-    (req, res, next) => {
-        let token = req.header("Authorization")
-        if (token != null) {
-            token = token.replace("Bearer ", "")
-            jwt.verify(token, process.env.JWT_SECRET,
-                (err, decoded) => {
-                    if (err || decoded == null) {
-                        console.log("Invalid token login again");
-                        return res.json({ message: "Invalid token login again" })
-                    } else {
-                        req.user = decoded
-                        next()
-                    }
-                }
-            )
-        } else {
-            next()
-        }
+app.use((req, res, next) => {
+    let token = req.header("Authorization");
+
+    if (!token) {
+        return next(); // allow public routes
     }
-)
+
+    token = token.replace("Bearer ", "");
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).json({
+                message: "Invalid token. Please login again."
+            });
+        }
+
+        req.user = decoded;
+        next();
+    });
+});
 
 const connectionString = process.env.MONGO_URI
 

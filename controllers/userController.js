@@ -1,6 +1,6 @@
 import User from "../models/user.js";
-import bcrypt from "bcrypt"
-import jwt from "jsonwebtoken"
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import axios from "axios";
 import Product from "../models/product.js";
 import Order from "../models/order.js";
@@ -12,501 +12,484 @@ import getDesignedEmail from "../lib/emailDesigner.js";
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-	service: "gmail",
-	host: "smtp.gmail.com",
-	port: 587,
-	secure: false,
-	auth: {
-		user: process.env.EMAIL_USER,
-		pass: process.env.APP_PASSWORD,
-	},
+  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.APP_PASSWORD,
+  },
 });
 
-
-
-
 export function createUser(req, res) {
+  console.log("Post request received");
+  const hashedPassword = bcrypt.hashSync(req.body.password, 10);
 
-    console.log("Post request received")
-    const hashedPassword = bcrypt.hashSync(req.body.password, 10)
+  const user = new User({
+    email: req.body.email,
+    firstName: req.body.firstName,
+    lastName: req.body.lastName,
+    password: hashedPassword,
+  });
 
-    const user = new User(
-        {
-            email: req.body.email,
-            firstName: req.body.firstName,
-            lastName: req.body.lastName,
-            password: hashedPassword
-        }
-    )
-
-    user.save().then(
-        () => {
-            res.json({
-                message: "User created successfully"
-            })
-        }
-    ).catch(
-        () => {
-            res.json({
-                message: "Failed to create user"
-            })
-        }
-    )
+  user
+    .save()
+    .then(() => {
+      res.json({
+        message: "User created successfully",
+      });
+    })
+    .catch(() => {
+      res.json({
+        message: "Failed to create user",
+      });
+    });
 }
 
 export function loginUser(req, res) {
+  console.log("Login request received");
+  User.findOne({
+    email: req.body.email,
+  }).then((user) => {
+    if (user == null) {
+      res.status(404).json({
+        message: "User not found",
+      });
+    } else {
+      if (user.isBlock) {
+        res.status(403).json({
+          message:
+            "Your account has been blocked. Please contact support for more information.",
+        });
+        return;
+      }
+      const isPasswordMatching = bcrypt.compareSync(
+        req.body.password,
+        user.password,
+      );
+      if (isPasswordMatching) {
+        const token = jwt.sign(
+          //use jwt.sign to create token from user data
 
-    console.log("Login request received")
-    User.findOne(
-        {
-            email: req.body.email
-        }
-    ).then(
-        (user) => {
-            if (user == null) {
-                res.status(404).json(
-                    {
-                        message: "User not found"
-                    }
-                )
-            } else {
-                if (user.isBlock) {
-                    res.status(403).json(
-                        {
-                            message: "Your account has been blocked. Please contact support for more information."
-                        }
-                    );
-                    return;
-                }
-                const isPasswordMatching = bcrypt.compareSync(req.body.password, user.password)
-                if (isPasswordMatching) {
-                    const token = jwt.sign( //use jwt.sign to create token from user data
-
-                        {
-                            email: user.email,
-                            firstName: user.firstName,
-                            lastName: user.lastName,
-                            role: user.role,
-                            isemailVerified: user.isEmailVerified,
-                            image: user.image,
-
-                        },
-                        process.env.JWT_SECRET,
-                        { expiresIn: "1h" }
-
-
-
-
-                    )
-                    res.json(
-                        {
-                            message: "Login successful",
-                            token: token,
-                            user: {
-                                email: user.email,
-                                firstName: user.firstName,
-                                lastName: user.lastName,
-                                role: user.role,
-                                isemailVerified: user.isEmailVerified,
-                            }
-                        }
-                    )
-                } else {
-                    res.status(401).json(
-                        {
-                            message: "Invalid password"
-                        }
-                    )
-                }
-            }
-        }
-    )
+          {
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            isemailVerified: user.isEmailVerified,
+            image: user.image,
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: "1h" },
+        );
+        res.json({
+          message: "Login successful",
+          token: token,
+          user: {
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            isemailVerified: user.isEmailVerified,
+          },
+        });
+      } else {
+        res.status(401).json({
+          message: "Invalid password",
+        });
+      }
+    }
+  });
 }
 export function isAdmin(req) {
-    if (req.user == null) {
-        return false
-    }
-    if (req.user.role != "admin") {
-        return false
-    }
-    return true;
+  if (req.user == null) {
+    return false;
+  }
+  if (req.user.role != "admin") {
+    return false;
+  }
+  return true;
 }
 
 export function isUser(req) {
-    if (req.user == null) {
-        return false
-    }
-    if (req.user.role != "user") {
-        return false
-    }
+  if (req.user == null) {
+    return false;
+  }
+  if (req.user.role != "user") {
+    return false;
+  }
 }
 
 export function getUser(req, res) {
-    if (req.user == null) {
-        res.status(401).json({
-            message: "Unauthorized",
-        });
-        return;
-    } else {
-        res.json(req.user);
-    }
+  if (req.user == null) {
+    res.status(401).json({
+      message: "Unauthorized",
+    });
+    return;
+  } else {
+    res.json(req.user);
+  }
 }
 
 export async function googleLogin(req, res) {
+  const token = req.body.token;
 
-    const token = req.body.token;
+  if (token == null) {
+    res.status(400).json({
+      message: "Token is required",
+    });
+    return;
+  }
+  try {
+    const googleResponse = await axios.get(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
 
-    if (token == null) {
-        res.status(400).json({
-            message: "Token is required",
+    const googleUser = googleResponse.data;
+
+    const user = await User.findOne({
+      email: googleUser.email,
+    });
+
+    if (user == null) {
+      const newUser = new User({
+        email: googleUser.email,
+        firstName: googleUser.given_name,
+        lastName: googleUser.family_name,
+        password: "abc",
+        isEmailVerified: googleUser.email_verified,
+        image: googleUser.picture,
+      });
+
+      let savedUser = await newUser.save();
+
+      const jwtToken = jwt.sign(
+        {
+          email: savedUser.email,
+          firstName: savedUser.firstName,
+          lastName: savedUser.lastName,
+          role: savedUser.role,
+          isEmailVerified: savedUser.isEmailVerified,
+          image: savedUser.image,
+        },
+        process.env.JWT_SECRET,
+      );
+      res.json({
+        message: "Login successful",
+        token: jwtToken,
+        user: {
+          email: savedUser.email,
+          firstName: savedUser.firstName,
+          lastName: savedUser.lastName,
+          role: savedUser.role,
+          isEmailVerified: savedUser.isEmailVerified,
+          image: savedUser.image,
+        },
+      });
+      return;
+    } else {
+      //login the user
+      if (user.isBlock) {
+        res.status(403).json({
+          message:
+            "Your account has been blocked. Please contact support for more information.",
         });
         return;
+      }
+      const jwtToken = jwt.sign(
+        {
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          isEmailVerified: user.isEmailVerified,
+          image: user.image,
+        },
+        process.env.JWT_SECRET,
+      );
+      res.json({
+        message: "Login successful",
+        token: jwtToken,
+        user: {
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          isEmailVerified: user.isEmailVerified,
+          image: user.image,
+        },
+      });
+      return;
     }
-    try {
-        const googleResponse = await axios.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-
-        const googleUser = googleResponse.data;
-
-        const user = await User.findOne({
-            email: googleUser.email
-        })
-
-        if (user == null) {
-            const newUser = new User({
-                email: googleUser.email,
-                firstName: googleUser.given_name,
-                lastName: googleUser.family_name,
-                password: "abc",
-                isEmailVerified: googleUser.email_verified,
-                image: googleUser.picture
-            })
-
-            let savedUser = await newUser.save()
-            
-            const jwtToken = jwt.sign(
-                {
-                    email: savedUser.email,
-                    firstName: savedUser.firstName,
-                    lastName: savedUser.lastName,
-                    role: savedUser.role,
-                    isEmailVerified: savedUser.isEmailVerified,
-                    image: savedUser.image,
-                },
-                process.env.JWT_SECRET
-            );
-            res.json({
-                message: "Login successful",
-                token: jwtToken,
-                user: {
-                    email: savedUser.email,
-                    firstName: savedUser.firstName,
-                    lastName: savedUser.lastName,
-                    role: savedUser.role,
-                    isEmailVerified: savedUser.isEmailVerified,
-                    image: savedUser.image,
-                },
-            });
-            return;
-        } else {
-            //login the user
-            if (user.isBlock) {
-                    res.status(403).json(
-                        {
-                            message: "Your account has been blocked. Please contact support for more information."
-                        }
-                    );
-                    return;
-                }
-            const jwtToken = jwt.sign(
-                {
-                    email: user.email,
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    role: user.role,
-                    isEmailVerified: user.isEmailVerified,
-                    image: user.image,
-                },
-                process.env.JWT_SECRET
-            );
-            res.json({
-                message: "Login successful",
-                token: jwtToken,
-                user: {
-                    email: user.email,
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    role: user.role,
-                    isEmailVerified: user.isEmailVerified,
-                    image: user.image,
-                },
-            });
-            return;
-        }
-
-    } catch (err) {
-        res.status(500).json({
-            message: "Failed to login with google",
-        });
-        return;
-    }
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to login with google",
+    });
+    return;
+  }
 }
 
 export async function getUsers(req, res) {
-    if (!isAdmin(req)) {
-        return res.status(403).json({ message: "You are not authorized" });
-    }
-    try {
-        const users = await User.find().select("-password").sort({ _id: -1 });
-        res.json(users);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Failed to fetch users" });
-    }
+  if (!isAdmin(req)) {
+    return res.status(403).json({ message: "You are not authorized" });
+  }
+  try {
+    const users = await User.find().select("-password").sort({ _id: -1 });
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch users" });
+  }
 }
 
 export async function getStats(req, res) {
-    if (!isAdmin(req)) {
-        return res.status(403).json({ message: "You are not authorized" });
-    }
-    try {
-        const totalUsers = await User.countDocuments();
-        const totalProducts = await Product.countDocuments();
-        const totalOrders = await Order.countDocuments();
+  if (!isAdmin(req)) {
+    return res.status(403).json({ message: "You are not authorized" });
+  }
+  try {
+    const totalUsers = await User.countDocuments();
+    const totalProducts = await Product.countDocuments();
+    const totalOrders = await Order.countDocuments();
 
-        const revenueResult = await Order.aggregate([
-            { $group: { _id: null, total: { $sum: "$total" } } }
-        ]);
-        const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+    const revenueResult = await Order.aggregate([
+      { $group: { _id: null, total: { $sum: "$total" } } },
+    ]);
+    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
-        const recentOrders = await Order.find().sort({ date: -1 }).limit(5);
+    const recentOrders = await Order.find().sort({ date: -1 }).limit(5);
 
-        res.json({
-            totalUsers,
-            totalProducts,
-            totalOrders,
-            totalRevenue,
-            recentOrders
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Failed to fetch stats" });
-    }
+    res.json({
+      totalUsers,
+      totalProducts,
+      totalOrders,
+      totalRevenue,
+      recentOrders,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch stats" });
+  }
 }
 
 export async function getAllUsers(req, res) {
-    if (!isAdmin(req)) {
-        return res.status(403).json({ message: "You are not authorized" });
-    }
-    try {
-        const users = await User.find().select("-password").sort({ _id: -1 });
-        res.json(users);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Failed to fetch users" });
-    }
+  if (!isAdmin(req)) {
+    return res.status(403).json({ message: "You are not authorized" });
+  }
+  try {
+    const users = await User.find().select("-password").sort({ _id: -1 });
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch users" });
+  }
 }
 
 export async function blockUser(req, res) {
-    if (!isAdmin(req)) {
-        return res.status(403).json({ message: "You are not authorized" });
+  if (!isAdmin(req)) {
+    return res.status(403).json({ message: "You are not authorized" });
+  }
+  try {
+    const email = req.params.email;
+    const { isBlock } = req.body;
+    const user = await User.findOneAndUpdate(
+      { email: email },
+      { isBlock: isBlock },
+      { new: true },
+    ).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
-    try {
-        const email = req.params.email;
-        const { isBlock } = req.body;
-        const user = await User.findOneAndUpdate(
-            { email: email },
-            { isBlock: isBlock },
-            { new: true }
-        ).select("-password");
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        res.json({ message: `User ${isBlock ? "blocked" : "unblocked"} successfully`, user });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Failed to update user block status" });
-    }
+    res.json({
+      message: `User ${isBlock ? "blocked" : "unblocked"} successfully`,
+      user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update user block status" });
+  }
 }
 
 export async function deleteUser(req, res) {
-    if (!isAdmin(req)) {
-        return res.status(403).json({ message: "You are not authorized" });
+  if (!isAdmin(req)) {
+    return res.status(403).json({ message: "You are not authorized" });
+  }
+  try {
+    const email = req.params.email;
+    const user = await User.findOneAndDelete({ email: email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
-    try {
-        const email = req.params.email;
-        const user = await User.findOneAndDelete({ email: email });
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        res.json({ message: "User deleted successfully" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Failed to delete user" });
-    }
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete user" });
+  }
 }
 
-
-
-
 export async function sendOTP(req, res) {
-	const email = req.params.email;
-	if (email == null) {
-		res.status(400).json({
-			message: "Email is required",
-		});
-		return;
-	}
+  const email = req.params.email;
+  if (email == null) {
+    res.status(400).json({
+      message: "Email is required",
+    });
+    return;
+  }
 
-	// 100000 - 999999
-	const otp = Math.floor(100000 + Math.random() * 900000);
+  // 100000 - 999999
+  const otp = Math.floor(100000 + Math.random() * 900000);
 
-	try {
-		const user = await User.findOne({ email: email });
+  try {
+    const user = await User.findOne({ email: email });
 
-		const firstName = user ? user.firstName : "there";
+    const firstName = user ? user.firstName : "there";
 
-		if (user == null) {
-			res.status(404).json({
-				message: "User not found",
-			});
-			return;
-		}
+    if (user == null) {
+      res.status(404).json({
+        message: "User not found",
+      });
+      return;
+    }
 
-		await OTP.deleteMany({
-			email: email,
-		});
+    await OTP.deleteMany({
+      email: email,
+    });
 
-		const newOTP = new OTP({
-			email: email,
-			otp: otp,
-		});
-		await newOTP.save();
+    const newOTP = new OTP({
+      email: email,
+      otp: otp,
+    });
+    await newOTP.save();
 
-		
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Your OTP for Password Reset",
+      text: `Hi! Your one-time passcode is ${otp}. It’s valid for 10 minutes. If you didn’t request this, ignore this email. — ${"Crystal Beauty Clear"}`,
+      html: getDesignedEmail({
+        otp,
+        firstName,
+        brandName: "Crystal Beauty Clear",
+        supportEmail: "support@cbc.com",
+        colors: { accent: "#fa812f", primary: "#fef3e2", secondary: "#393e46" },
+      }),
+    });
 
-		await transporter.sendMail({
-			from: process.env.EMAIL_USER,
-			to: email,
-			subject: "Your OTP for Password Reset",
-			text: `Hi! Your one-time passcode is ${otp}. It’s valid for 10 minutes. If you didn’t request this, ignore this email. — ${
-				"Crystal Beauty Clear"
-			}`,
-			html: getDesignedEmail({
-				otp,
-				firstName,
-				brandName: "Crystal Beauty Clear",
-				supportEmail: "support@cbc.com",
-				colors: { accent: "#fa812f", primary: "#fef3e2", secondary: "#393e46" },
-			}),
-		});
-
-		res.json({
-			message: "OTP sent to your email",
-		});
-	} catch (err) {
-		console.error(err);
-		res.status(500).json({
-			message: "Failed to send OTP",
-		});
-	}
+    res.json({
+      message: "OTP sent to your email",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Failed to send OTP",
+    });
+  }
 }
 
 export async function changePasswordViaOTP(req, res) {
-	const email = req.body.email;
-	const otp = req.body.otp;
-	const newPassword = req.body.newPassword;
-	try {
-		const otpRecord = await OTP.findOne({
-			email: email,
-			otp: otp,
-		});
+  const email = req.body.email;
+  const otp = req.body.otp;
+  const newPassword = req.body.newPassword;
+  try {
+    const otpRecord = await OTP.findOne({
+      email: email,
+      otp: otp,
+    });
 
-		if (otpRecord == null) {
-			res.status(400).json({
-				message: "Invalid OTP",
-			});
-			return;
-		}
+    if (otpRecord == null) {
+      res.status(400).json({
+        message: "Invalid OTP",
+      });
+      return;
+    }
 
-		await OTP.deleteMany({
-			email: email,
-		});
+    await OTP.deleteMany({
+      email: email,
+    });
 
-		const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
 
-		await User.updateOne(
-			{
-				email: email,
-			},
-			{
-				password: hashedPassword,
-			}
-		);
-		res.json({
-			message: "Password changed successfully",
-		});
-	} catch (err) {
-		res.status(500).json({
-			message: "Failed to change password",
-		});
-	}
+    await User.updateOne(
+      {
+        email: email,
+      },
+      {
+        password: hashedPassword,
+      },
+    );
+    res.json({
+      message: "Password changed successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to change password",
+    });
+  }
 }
 
-// export async function updateUserData(req, res) {
-// 	if (req.user == null) {
-// 		res.status(401).json({
-// 			message: "Unauthorized",
-// 		});
-// 		return;
-// 	}
+export async function updateUserData(req, res) {
+  if (!req.user) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
 
-// 	try{
+  try {
+    const updatedUser = await User.findOneAndUpdate(
+      { email: req.user.email },
+      {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        image: req.body.image,
+      },
+      { new: true }, // return updated document
+    );
 
-// 		await User.updateOne({
-// 			email: req.user.email
-// 		},{
-// 			firstName: req.body.firstName,
-// 			lastName: req.body.lastName,
-// 			image: req.body.image
-// 		})
-// 		res.json({
-// 			message: "User data updated successfully",
-// 		});
-// 	}catch(err){
-// 		res.status(500).json({
-// 			message: "Failed to update user data",
-// 		});
-// 	}
-// }
+    if (!updatedUser) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
 
-// export async function updatePassword(req, res) {
-// 	if (req.user == null) {
-// 		res.status(401).json({
-// 			message: "Unauthorized",
-// 		});
-// 		return;
-// 	}
-// 	try{
-// 		const hashedPassword = bcrypt.hashSync(req.body.password, 10);
-// 		await User.updateOne({
-// 			email: req.user.email
-// 		},{
-// 			password: hashedPassword
-// 		})
-// 		res.json({
-// 			message: "Password updated successfully",
-// 		});
-// 	}
-// 	catch(err){
-// 		res.status(500).json({
-// 			message: "Failed to update password",
-// 		});
-// 	}
-// }
+    res.json({
+      message: "User data updated successfully",
+      user: updatedUser,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to update user data",
+    });
+  }
+}
+
+export async function updatePassword(req, res) {
+  if (req.user == null) {
+    res.status(401).json({
+      message: "Unauthorized",
+    });
+    return;
+  }
+  try {
+    const hashedPassword = bcrypt.hashSync(req.body.password, 10);
+    await User.updateOne(
+      {
+        email: req.user.email,
+      },
+      {
+        password: hashedPassword,
+      },
+    );
+    res.json({
+      message: "Password updated successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to update password",
+    });
+  }
+}
