@@ -442,7 +442,7 @@ export async function updateUserData(req, res) {
         lastName: req.body.lastName,
         image: req.body.image,
       },
-      { new: true }, // return updated document
+      { new: true },
     );
 
     if (!updatedUser) {

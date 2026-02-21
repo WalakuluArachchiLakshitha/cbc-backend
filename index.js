@@ -15,14 +15,21 @@ dotenv.config()
 const app = express()
 
 app.use(cors())
+
+
+// app.use(cors({
+//   origin: 'https://cbc-batch-seven-frontend-olive.vercel.app/', 
+//   credentials: true
+// }));
+
 app.use(express.json())
 
-// JWT middleware
+
 app.use((req, res, next) => {
     let token = req.header("Authorization");
 
     if (!token) {
-        return next(); // allow public routes
+        return next();
     }
 
     token = token.replace("Bearer ", "");
@@ -45,7 +52,7 @@ mongoose.connect(connectionString).then(
     () => {
         console.log("Database connected successfully")
 
-        // Run expired-order cancellation immediately on startup, then every 60 seconds
+      
         cancelExpiredOrders();
         setInterval(cancelExpiredOrders, 60 * 1000);
         console.log("[Orders] Auto-cancellation scheduler started (every 60s)")

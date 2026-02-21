@@ -1,6 +1,6 @@
 import Review from "../models/review.js";
 
-// Get all reviews
+
 export async function getReviews(req, res) {
     try {
         const reviews = await Review.find().sort({ date: -1 });
@@ -11,7 +11,7 @@ export async function getReviews(req, res) {
     }
 }
 
-// Add a new review
+
 export async function addReview(req, res) {
     try {
         const { name, rating, comment } = req.body;

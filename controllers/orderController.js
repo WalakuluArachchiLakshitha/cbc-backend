@@ -4,7 +4,7 @@ import User from "../models/user.js";
 import { isAdmin } from "./userController.js";
 import crypto from "crypto";
 
-// ─── Helper: generate next order ID ──────────────────────────────────────────
+
 async function generateOrderID() {
 	const lastOrder = await Order.findOne().sort({ date: -1 });
 	if (!lastOrder) return "CBC0000001";
@@ -12,7 +12,7 @@ async function generateOrderID() {
 	return "CBC" + String(lastNum + 1).padStart(7, "0");
 }
 
-// ─── CREATE ORDER ─────────────────────────────────────────────────────────────
+
 export async function createOrder(req, res) {
 	try {
 		const user = req.user;
@@ -20,7 +20,7 @@ export async function createOrder(req, res) {
 			return res.status(401).json({ message: "Unauthorized user" });
 		}
 
-		// Validate required fields
+		
 		const { address, phone, customerName, items: itemsInRequest } = req.body;
 
 		if (!address || address.trim() === "") {
@@ -37,7 +37,7 @@ export async function createOrder(req, res) {
 			? customerName.trim()
 			: user.firstName + " " + user.lastName;
 
-		// Validate products and build order items
+		
 		const itemsToAdd = [];
 		let total = 0;
 
@@ -74,7 +74,7 @@ export async function createOrder(req, res) {
 
 		const newOrderID = await generateOrderID();
 
-		// 5-minute payment window
+	
 		const paymentExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
 		const newOrder = new Order({
@@ -92,7 +92,7 @@ export async function createOrder(req, res) {
 
 		const savedOrder = await newOrder.save();
 
-		// ✅ FIXED: reduce stock — iterate over array correctly using .length
+		
 		for (let i = 0; i < itemsToAdd.length; i++) {
 			const item = itemsToAdd[i];
 			await Product.updateOne(
@@ -111,7 +111,6 @@ export async function createOrder(req, res) {
 	}
 }
 
-// ─── GET ORDERS (admin sees all, user sees own) ───────────────────────────────
 export async function getOrders(req, res) {
 	try {
 		if (isAdmin(req)) {
@@ -129,7 +128,7 @@ export async function getOrders(req, res) {
 	}
 }
 
-// ─── GET USER'S OWN ORDERS ────────────────────────────────────────────────────
+
 export async function getUserOrders(req, res) {
 	try {
 		if (!req.user) {
@@ -143,7 +142,7 @@ export async function getUserOrders(req, res) {
 	}
 }
 
-// ─── UPDATE ORDER STATUS (admin only) ────────────────────────────────────────
+
 export async function updateOrderStatus(req, res) {
 	if (!isAdmin(req)) {
 		return res.status(403).json({ message: "You are not authorized to update order status" });
@@ -159,7 +158,7 @@ export async function updateOrderStatus(req, res) {
 	}
 }
 
-// ─── DELETE ORDER (admin only) ────────────────────────────────────────────────
+
 export async function deleteOrder(req, res) {
 	if (!isAdmin(req)) {
 		return res.status(403).json({ message: "You are not authorized to delete orders" });
@@ -177,7 +176,7 @@ export async function deleteOrder(req, res) {
 	}
 }
 
-// ─── CANCEL EXPIRED ORDERS & RESTORE STOCK ───────────────────────────────────
+
 export async function cancelExpiredOrders() {
 	try {
 		const now = new Date();
@@ -192,14 +191,14 @@ export async function cancelExpiredOrders() {
 		console.log(`[Orders] Cancelling ${expiredOrders.length} expired order(s)...`);
 
 		for (const order of expiredOrders) {
-			// Restore stock for each item
+			
 			for (const item of order.items) {
 				await Product.updateOne(
 					{ productID: item.productID },
 					{ $inc: { stock: item.quantity } }
 				);
 			}
-			// Mark order as cancelled
+		
 			await Order.updateOne(
 				{ orderID: order.orderID },
 				{ status: "cancelled", paymentStatus: "cancelled" }
@@ -211,7 +210,7 @@ export async function cancelExpiredOrders() {
 	}
 }
 
-// ─── PAYHERE PAYMENT NOTIFY (called by PayHere server) ───────────────────────
+
 export async function confirmPayment(req, res) {
 	try {
 		const {
@@ -226,7 +225,7 @@ export async function confirmPayment(req, res) {
 
 		const merchantSecret = process.env.PAYHERE_SECRET || "";
 
-		// Verify PayHere MD5 signature
+		
 		const localMd5 = crypto
 			.createHash("md5")
 			.update(merchantSecret)
@@ -252,22 +251,22 @@ export async function confirmPayment(req, res) {
 		}
 
 		if (status_code === "2") {
-			// Payment successful
+		
 			await Order.updateOne(
 				{ orderID: order_id },
 				{ status: "processing", paymentStatus: "paid" }
 			);
 			console.log(`[PayHere] Payment confirmed for order ${order_id}`);
 		} else if (status_code === "0") {
-			// Pending payment
+			
 			console.log(`[PayHere] Payment pending for order ${order_id}`);
 		} else {
-			// Payment failed or cancelled (-1, -2, -3)
+			
 			await Order.updateOne(
 				{ orderID: order_id },
 				{ paymentStatus: "failed" }
 			);
-			// Restore stock
+			
 			const order = await Order.findOne({ orderID: order_id });
 			if (order) {
 				for (const item of order.items) {
@@ -288,8 +287,7 @@ export async function confirmPayment(req, res) {
 	}
 }
 
-// ─── GENERATE PAYHERE HASH (called by frontend before form submit) ────────────
-// PayHere requires: md5(merchant_id + order_id + amount + currency + md5(secret).toUpperCase())
+
 export async function generatePayHereHash(req, res) {
 	try {
 		if (!req.user) {
@@ -302,7 +300,7 @@ export async function generatePayHereHash(req, res) {
 			return res.status(400).json({ message: "orderID and amount are required" });
 		}
 
-		// Verify the order belongs to this user
+	
 		const order = await Order.findOne({ orderID, email: req.user.email });
 		if (!order) {
 			return res.status(404).json({ message: "Order not found" });
@@ -315,17 +313,17 @@ export async function generatePayHereHash(req, res) {
 			return res.status(500).json({ message: "PayHere not configured on server" });
 		}
 
-		// Step 1: Hash the merchant secret
+	
 		const hashedSecret = crypto
 			.createHash("md5")
 			.update(merchantSecret)
 			.digest("hex")
 			.toUpperCase();
 
-		// Step 2: Format amount to 2 decimal places
+		
 		const formattedAmount = parseFloat(amount).toFixed(2);
 
-		// Step 3: Build final hash
+	
 		const hash = crypto
 			.createHash("md5")
 			.update(merchantId + orderID + formattedAmount + currency + hashedSecret)
@@ -339,7 +337,7 @@ export async function generatePayHereHash(req, res) {
 	}
 }
 
-// ─── DEMO: Simulate successful payment (no real PayHere account needed) ────────
+
 export async function confirmPaymentDemo(req, res) {
 	try {
 		if (!req.user) {
@@ -349,7 +347,7 @@ export async function confirmPaymentDemo(req, res) {
 		if (!orderID) {
 			return res.status(400).json({ message: "orderID is required" });
 		}
-		// Verify order belongs to this user and is still pending
+		
 		const order = await Order.findOne({ orderID, email: req.user.email });
 		if (!order) {
 			return res.status(404).json({ message: "Order not found" });
@@ -360,7 +358,7 @@ export async function confirmPaymentDemo(req, res) {
 		if (order.status === "cancelled") {
 			return res.status(400).json({ message: "Order has expired and been cancelled" });
 		}
-		// Mark as paid
+		
 		await Order.updateOne(
 			{ orderID },
 			{ status: "processing", paymentStatus: "paid" }
